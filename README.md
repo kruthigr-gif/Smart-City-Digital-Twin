@@ -224,6 +224,4 @@ If that address does not load, check the server output and the frontend-serving 
 
 Suggestions and improvements are welcome. Create a branch, make a focused change, and open a pull request describing what changed and how it was tested.
 
-## 📄 License
 
-No license was specified in the project overview. Add a `LICENSE` file before presenting the repository as open source.
