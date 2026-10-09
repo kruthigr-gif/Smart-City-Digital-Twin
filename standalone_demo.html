@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart City Twin - Standalone Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { margin: 0; padding: 0; background-color: #0f172a; color: white; overflow: hidden; font-family: sans-serif; }
+    .glass-panel { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 0.75rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+    .custom-popup .leaflet-popup-content-wrapper { background: #1e293b; color: #fff; border: 1px solid #334155; border-radius: 0.5rem; }
+    .custom-popup .leaflet-popup-tip { background: #1e293b; }
+    .dark-tiles { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+    
+    function App() {
+      const [sensorData, setSensorData] = useState({});
+      const mapRef = useRef(null);
+      const mapInstance = useRef(null);
+      const markersRef = useRef({});
+
+      // Initialize Map
+      useEffect(() => {
+        if (!mapInstance.current) {
+          mapInstance.current = L.map(mapRef.current, { zoomControl: false }).setView([40.7128, -74.0060], 12);
+          L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            attribution: '&copy; Google Maps',
+            className: 'dark-tiles'
+          }).addTo(mapInstance.current);
+
+          const ro = new ResizeObserver(() => mapInstance.current && mapInstance.current.invalidateSize());
+          ro.observe(mapRef.current);
+        }
+      }, []);
+
+      // Mock Data Simulator
+      useEffect(() => {
+        const nodes = Array.from({length: 15}).map((_, i) => ({
+          id: i + 1,
+          lat: 40.7128 + (Math.random() - 0.5) * 0.1,
+          lon: -74.0060 + (Math.random() - 0.5) * 0.1,
+          topic: i % 3 === 0 ? 'environment' : (i % 2 === 0 ? 'energy' : 'traffic')
+        }));
+
+        const interval = setInterval(() => {
+          const node = nodes[Math.floor(Math.random() * nodes.length)];
+          const data = { ...node, timestamp: Date.now() / 1000 };
+          
+          if (node.topic === 'traffic') {
+            data.vehicle_count = Math.floor(Math.random() * 100);
+            data.avg_speed = Math.random() * 120;
+            data.congestion = Math.random() * 100;
+          } else if (node.topic === 'environment') {
+            data.aqi = Math.floor(Math.random() * 300);
+            data.temperature = Math.random() * 40 - 10;
+          } else {
+            data.consumption_kw = Math.random() * 500 + 10;
+          }
+
+          setSensorData(prev => ({ ...prev, [node.id]: data }));
+        }, 500);
+
+        return () => clearInterval(interval);
+      }, []);
+
+      // Update Map Markers
+      useEffect(() => {
+        if (!mapInstance.current) return;
+        
+        Object.values(sensorData).forEach(node => {
+          let color = '#3b82f6';
+          if (node.topic === 'traffic') {
+            color = node.congestion > 70 ? '#ef4444' : node.congestion > 30 ? '#eab308' : '#10b981';
+          } else if (node.topic === 'environment') {
+            color = node.aqi > 150 ? '#ef4444' : '#8b5cf6';
+          } else if (node.topic === 'energy') {
+            color = '#f59e0b';
+          }
+
+          if (!markersRef.current[node.id]) {
+            markersRef.current[node.id] = L.circleMarker([node.lat, node.lon], {
+              radius: 8, color, fillColor: color, fillOpacity: 0.6, weight: 2
+            }).addTo(mapInstance.current);
+          } else {
+            markersRef.current[node.id].setStyle({ color, fillColor: color });
+          }
+
+          // Update popup
+          const popupContent = `
+            <div class="p-1">
+              <h3 style="font-weight:bold; border-bottom:1px solid #334155; padding-bottom:4px; margin-bottom:8px;">Sector ${node.id}</h3>
+              <div style="font-size:14px;">
+                ${node.topic === 'traffic' ? `
+                  <div>Vehicles: <span style="color:#3b82f6; font-family:monospace;">${node.vehicle_count}</span></div>
+                  <div>Speed: <span style="font-family:monospace;">${node.avg_speed.toFixed(1)} km/h</span></div>
+                  <div>Congestion: <span style="color:${color}; font-family:monospace;">${node.congestion.toFixed(1)}%</span></div>
+                ` : ''}
+                ${node.topic === 'environment' ? `
+                  <div>AQI: <span style="color:#8b5cf6; font-family:monospace;">${node.aqi}</span></div>
+                ` : ''}
+                ${node.topic === 'energy' ? `
+                  <div>Usage: <span style="color:#f59e0b; font-family:monospace;">${node.consumption_kw.toFixed(1)} kW</span></div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+          markersRef.current[node.id].bindPopup(popupContent, { className: 'custom-popup' });
+        });
+      }, [sensorData]);
+
+      // Calculate stats
+      const totalVehicles = Object.values(sensorData).reduce((a, b) => a + (b.vehicle_count || 0), 0);
+      const totalPower = Object.values(sensorData).reduce((a, b) => a + (b.consumption_kw || 0), 0);
+      const envNodes = Object.values(sensorData).filter(n => n.topic === 'environment');
+      const avgAqi = envNodes.length ? Math.round(envNodes.reduce((a, b) => a + b.aqi, 0) / envNodes.length) : 0;
+      const trafficNodes = Object.values(sensorData).filter(n => n.topic === 'traffic');
+
+      return (
+        <div className="flex h-screen w-full">
+          {/* Sidebar */}
+          <div className="w-96 flex-shrink-0 z-[1000] glass-panel m-4 flex flex-col absolute left-0 top-0 bottom-0 pointer-events-auto">
+            <div className="p-6 border-b border-gray-700/50">
+              <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
+                Smart City Twin
+              </h1>
+              <p className="text-gray-400 text-sm mt-2 font-light">Interactive Live Demo</p>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+              {avgAqi > 100 && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start gap-3">
+                  <div className="text-red-500 shrink-0 mt-0.5">⚠️</div>
+                  <div>
+                    <h4 className="text-red-400 font-semibold text-sm">Poor Air Quality Alert</h4>
+                    <p className="text-xs text-gray-400 mt-1">Average AQI is {avgAqi}. Consider issuing health advisories.</p>
+                  </div>
+                </div>
+              )}
+              
+              <section>
+                <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Traffic Prediction</h3>
+                <div className="space-y-3">
+                  {trafficNodes.map(node => (
+                    <div key={node.id} className="bg-slate-800 p-3 rounded-lg border border-slate-700/50">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium">Sector {node.id}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${node.congestion > 70 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+                          {node.congestion > 70 ? 'Heavy' : 'Clear'}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-900 rounded-full h-1.5 mt-2">
+                        <div 
+                          className={`h-1.5 rounded-full transition-all duration-500 ${node.congestion > 70 ? 'bg-red-500' : node.congestion > 30 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                          style={{ width: `${node.congestion}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+
+          {/* Map Container */}
+          <div ref={mapRef} className="flex-1 w-full h-full z-0 absolute inset-0"></div>
+          
+          {/* Overlay Stats */}
+          <div className="absolute top-4 right-4 z-[1000] flex gap-4 pointer-events-auto">
+            <div className="glass-panel px-4 py-2 flex items-center gap-3">
+              <div className="text-blue-400 text-xl">🚗</div>
+              <div>
+                <div className="text-xs text-gray-400 uppercase tracking-wider">Active Vehicles</div>
+                <div className="font-semibold">{totalVehicles}</div>
+              </div>
+            </div>
+            <div className="glass-panel px-4 py-2 flex items-center gap-3">
+              <div className="text-yellow-400 text-xl">⚡</div>
+              <div>
+                <div className="text-xs text-gray-400 uppercase tracking-wider">Power Grid Load</div>
+                <div className="font-semibold">{Math.round(totalPower)} kW</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart City Control Center S-Tier+</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.osmbuildings.org/classic/0.2.2b/OSMBuildings-Leaflet.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Recharts -->
+  <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { margin: 0; padding: 0; background-color: #0f172a; color: white; overflow: hidden; font-family: sans-serif; }
+    .glass-panel { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.5); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+    .custom-popup .leaflet-popup-content-wrapper { background: #1e293b; color: #fff; border: 1px solid #334155; border-radius: 0.5rem; }
+    .custom-popup .leaflet-popup-tip { background: #1e293b; }
+    .dark-tiles { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="error-box" style="position:absolute; top:0; left:0; width:100%; color:red; z-index:99999;"></div>
+  <script>
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+      document.getElementById('error-box').innerHTML += '<p>' + msg + ' in ' + url + ':' + lineNo + '</p>';
+      return false;
+    };
+  </script>
+
+  <div id="root"></div>
+  
+  <!-- Load unified bundle to guarantee execution order and prevent blank screens -->
+  <script type="text/babel" src="js/bundle.jsx"></script>
+</body>
+</html>
